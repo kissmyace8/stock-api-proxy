@@ -1,6 +1,6 @@
 // Vercel Serverless Function
 // 這支程式的功能是作為一個代理 (Proxy)
-// 接收來自我們儀表板的請求，然後去向 Yahoo Finance 取得資料，最後回傳給儀表板
+// 接收來自我們儀表板的請求，然後去向 Yahoo Finance 取得資料，最後回傳給儀表板 
 
 export default async function handler(request, response) {
     // 從請求的 URL 中獲取股票代號，例如: .../api/finance?symbols=AAPL,TSLA,2330.TW
