@@ -1,6 +1,4 @@
-// Vercel Serverless Function - The Final Professional Solution using Alpha Vantage API
-
-const fetch = require('node-fetch');
+// Vercel Serverless Function - The Final Native Fetch Version
 
 // ★★★ 您專屬的、有效的 Alpha Vantage API Key ★★★
 const ALPHA_VANTAGE_API_KEY = 'YSHVIMRE9VSIFUQI';
@@ -28,7 +26,7 @@ export default async function handler(request, response) {
   }
 
   if (ALPHA_VANTAGE_API_KEY === 'YOUR_API_KEY' || !ALPHA_VANTAGE_API_KEY) {
-    return response.status(500).json({ error: 'API Key not configured in the serverless function.' });
+    return response.status(500).json({ error: 'API Key not configured.' });
   }
 
   const symbolsArray = symbols.split(',');
@@ -36,14 +34,28 @@ export default async function handler(request, response) {
 
   try {
     for (const symbol of symbolsArray) {
-      // 為了遵守頻率限制，每查詢一支股票就延遲 13 秒
-      await delay(13000); 
+      await delay(13000); // 遵守頻率限制
 
       const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-      const apiResponse = await fetch(url);
-      const data = await apiResponse.json();
 
+      // 使用 Vercel 環境內建的 fetch，不再需要 require('node-fetch')
+      const apiResponse = await fetch(url);
+
+      if (!apiResponse.ok) {
+          // 嘗試解析錯誤訊息，如果不行就用狀態碼
+          let errorMsg = `API request failed with status ${apiResponse.status}`;
+          try {
+              const errorData = await apiResponse.json();
+              errorMsg = errorData.Information || errorData.Note || JSON.stringify(errorData);
+          } catch (e) {
+              // 解析失敗，維持原狀
+          }
+          throw new Error(errorMsg);
+      }
+
+      const data = await apiResponse.json();
       const quote = data['Global Quote'];
+
       if (quote && Object.keys(quote).length > 0) {
         results.push({
           symbol: quote['01. symbol'],
@@ -55,7 +67,7 @@ export default async function handler(request, response) {
         });
       } else {
          console.warn(`No data for symbol: ${symbol}. Response:`, JSON.stringify(data));
-         results.push({ symbol: symbol, price: null, name: symbol });
+         results.push({ symbol: symbol, price: null, name: symbol, Note: data.Note });
       }
     }
 
