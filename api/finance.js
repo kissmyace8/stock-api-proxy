@@ -3,7 +3,7 @@
 const fetch = require('node-fetch');
 
 // ★★★ 您專屬的 Alpha Vantage API Key 已經幫您填好了 ★★★
-const ALPHA_VANTAGE_API_KEY = 'QNTX60XRORBCPEQ1';
+const ALPHA_VANTAGE_API_KEY = 'YSHVIMRE9VSIFUQI';
 
 function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', 'https://www.coffeewingman.com');
