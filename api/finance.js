@@ -1,13 +1,19 @@
-// Vercel Serverless Function - The Final Solution using a more stable endpoint
+// Vercel Serverless Function - The Final Professional Solution using Alpha Vantage API
 
-// 引入我們在 package.json 中指定的 node-fetch 工具
 const fetch = require('node-fetch');
 
-// 設定CORS標頭
+// ★★★ 您專屬的 Alpha Vantage API Key 已經幫您填好了 ★★★
+const ALPHA_VANTAGE_API_KEY = 'QNTX60XRORBCPEQ1';
+
 function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', 'https://www.coffeewingman.com');
   response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+// Alpha Vantage 免費方案有頻率限制 (每分鐘5次)，我們需要一個延遲函式
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default async function handler(request, response) {
@@ -23,48 +29,40 @@ export default async function handler(request, response) {
   }
 
   const symbolsArray = symbols.split(',');
-  const promises = symbolsArray.map(symbol => {
-    // 使用更穩定的 v8 端點，雖然需要對每個股票單獨發送請求
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
-    return fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    }).then(res => {
-      if (!res.ok) {
-        // 如果請求失敗，拋出一個包含狀態碼的錯誤
-        throw new Error(`Failed for symbol ${symbol} with status ${res.status}`);
-      }
-      return res.json();
-    }).then(data => {
-      // 從回傳的資料中解析出我們需要的欄位
-      const result = data.chart.result[0];
-      const meta = result.meta;
-      return {
-        symbol: meta.symbol,
-        name: meta.instrumentType === 'EQUITY' ? result.meta.symbol : meta.exchangeName, // 指數沒有公司名，用交易所名代替
-        price: meta.regularMarketPrice,
-        change: meta.regularMarketPrice - meta.previousClose,
-        changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
-        previousClose: meta.previousClose
-      };
-    }).catch(error => {
-      // 如果某支股票查詢失敗，回傳一個錯誤物件，而不是讓整個請求失敗
-      console.error(`Error processing symbol ${symbol}:`, error.message);
-      return { symbol: symbol, error: true, message: error.message };
-    });
-  });
+  const results = [];
 
   try {
-    const results = await Promise.all(promises);
-    // 過濾掉查詢失敗的股票
-    const successfulResults = results.filter(r => !r.error);
+    for (const symbol of symbolsArray) {
+      // 為了遵守頻率限制，每查詢一支股票就延遲 13 秒
+      await delay(13000); 
+
+      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+      const apiResponse = await fetch(url);
+      const data = await apiResponse.json();
+
+      const quote = data['Global Quote'];
+      // 檢查回傳的 quote 物件是否存在且有內容
+      if (quote && Object.keys(quote).length > 0) {
+        results.push({
+          symbol: quote['01. symbol'],
+          // Alpha Vantage 免費方案不直接提供公司全名，我們先用代號代替
+          name: quote['01. symbol'], 
+          price: parseFloat(quote['05. price']),
+          change: parseFloat(quote['09. change']),
+          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+          previousClose: parseFloat(quote['08. previous close']),
+        });
+      } else {
+         console.warn(`No data found for symbol: ${symbol}. Response:`, JSON.stringify(data));
+         // 即使某支股票查不到，也回傳一個包含代號的物件，方便前端判斷
+         results.push({ symbol: symbol, price: null, name: symbol });
+      }
+    }
 
     response.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
-    return response.status(200).json(successfulResults);
+    return response.status(200).json(results);
 
   } catch (error) {
-    console.error("[API Handler Error]", error);
-    return response.status(500).json({ error: 'An unexpected error occurred.' });
+    console.error("[API Error]", error);
+    return response.status(500).json({ error: `Backend Error: ${error.message}` });
   }
-}
