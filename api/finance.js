@@ -2,7 +2,7 @@
 
 const fetch = require('node-fetch');
 
-// ★★★ 您專屬的 Alpha Vantage API Key 已經幫您填好了 ★★★
+// ★★★ 您專屬的、有效的 Alpha Vantage API Key ★★★
 const ALPHA_VANTAGE_API_KEY = 'YSHVIMRE9VSIFUQI';
 
 function setCorsHeaders(response) {
@@ -11,7 +11,6 @@ function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
-// Alpha Vantage 免費方案有頻率限制 (每分鐘5次)，我們需要一個延遲函式
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -28,6 +27,10 @@ export default async function handler(request, response) {
     return response.status(400).json({ error: 'Symbols query parameter is required' });
   }
 
+  if (ALPHA_VANTAGE_API_KEY === 'YOUR_API_KEY' || !ALPHA_VANTAGE_API_KEY) {
+    return response.status(500).json({ error: 'API Key not configured in the serverless function.' });
+  }
+
   const symbolsArray = symbols.split(',');
   const results = [];
 
@@ -41,20 +44,17 @@ export default async function handler(request, response) {
       const data = await apiResponse.json();
 
       const quote = data['Global Quote'];
-      // 檢查回傳的 quote 物件是否存在且有內容
       if (quote && Object.keys(quote).length > 0) {
         results.push({
           symbol: quote['01. symbol'],
-          // Alpha Vantage 免費方案不直接提供公司全名，我們先用代號代替
-          name: quote['01. symbol'], 
+          name: quote['01. symbol'],
           price: parseFloat(quote['05. price']),
           change: parseFloat(quote['09. change']),
           changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
           previousClose: parseFloat(quote['08. previous close']),
         });
       } else {
-         console.warn(`No data found for symbol: ${symbol}. Response:`, JSON.stringify(data));
-         // 即使某支股票查不到，也回傳一個包含代號的物件，方便前端判斷
+         console.warn(`No data for symbol: ${symbol}. Response:`, JSON.stringify(data));
          results.push({ symbol: symbol, price: null, name: symbol });
       }
     }
@@ -66,3 +66,4 @@ export default async function handler(request, response) {
     console.error("[API Error]", error);
     return response.status(500).json({ error: `Backend Error: ${error.message}` });
   }
+}
